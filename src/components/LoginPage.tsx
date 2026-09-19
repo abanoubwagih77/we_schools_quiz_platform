@@ -60,20 +60,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           }),
         });
 
-        // Verify that the response is actually valid JSON (not HTML 404/500 from Vercel)
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const data = await res.json();
-          if (res.ok && data?.user) {
-            loginOk = true;
-            userData = data.user;
-            tokenData = data.token;
-          } else if (!res.ok) {
-            throw new Error(data.error || 'فشل تسجيل الدخول. تأكد من البيانات.');
+        const rawText = await res.text();
+        if (rawText && rawText.trim()) {
+          try {
+            const data = JSON.parse(rawText);
+            if (res.ok && data?.user) {
+              loginOk = true;
+              userData = data.user;
+              tokenData = data.token;
+            } else if (!res.ok && data?.error) {
+              throw new Error(data.error);
+            }
+          } catch (jsonErr: any) {
+            // Not valid JSON or empty body - silently proceed to direct Firestore fallback
+            if (jsonErr.message && !jsonErr.message.includes('JSON') && !jsonErr.message.includes('token')) {
+              throw jsonErr;
+            }
           }
         }
       } catch (networkOrApiErr: any) {
-        if (networkOrApiErr.message && !networkOrApiErr.message.includes('JSON')) {
+        if (networkOrApiErr.message && !networkOrApiErr.message.includes('JSON') && !networkOrApiErr.message.includes('token') && !networkOrApiErr.message.includes('Failed to execute')) {
           throw networkOrApiErr;
         }
       }

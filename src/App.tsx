@@ -74,21 +74,28 @@ export default function App() {
           fetch('/api/sessions'),
         ]);
 
-        const isJson = (res: Response) => (res.headers.get('content-type') || '').includes('application/json');
+        const safeJson = async (res: Response) => {
+          try {
+            const txt = await res.text();
+            return txt && txt.trim() ? JSON.parse(txt) : null;
+          } catch {
+            return null;
+          }
+        };
 
-        if (quizzesRes.ok && isJson(quizzesRes)) {
-          const qData = await quizzesRes.json();
+        if (quizzesRes.ok) {
+          const qData = await safeJson(quizzesRes);
           if (Array.isArray(qData)) {
             setQuizzes(qData);
             loadedFromApi = true;
           }
         }
-        if (foldersRes.ok && isJson(foldersRes)) {
-          const fData = await foldersRes.json();
+        if (foldersRes.ok) {
+          const fData = await safeJson(foldersRes);
           if (Array.isArray(fData)) setFolders(fData);
         }
-        if (sessionsRes.ok && isJson(sessionsRes)) {
-          const sData = await sessionsRes.json();
+        if (sessionsRes.ok) {
+          const sData = await safeJson(sessionsRes);
           if (Array.isArray(sData)) setSessions(sData);
         }
       } catch (apiErr) {
