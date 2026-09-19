@@ -10,6 +10,7 @@ import {
   School,
 } from 'lucide-react';
 import { User as UserType, WE_SCHOOLS } from '../types';
+import { getClientStore, saveClientStore } from '../lib/firebaseStoreClient';
 
 interface AccountSettingsModalProps {
   currentUser: UserType;
@@ -49,26 +50,69 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/update-credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: currentUser.id,
-          currentPassword: currentPassword.trim(),
-          newUsername: newUsername.trim(),
-          newPassword: newPassword.trim() || undefined,
-          newSchool: selectedSchool,
-        }),
-      });
+      let updatedUser: UserType | null = null;
+      let handledViaApi = false;
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'فشل تحديث بيانات الحساب.');
+      try {
+        const res = await fetch('/api/auth/update-credentials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUser.id,
+            currentPassword: currentPassword.trim(),
+            newUsername: newUsername.trim(),
+            newPassword: newPassword.trim() || undefined,
+            newSchool: selectedSchool,
+          }),
+        });
+
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || 'فشل تحديث بيانات الحساب.');
+          }
+          if (data.user) {
+            updatedUser = data.user;
+            handledViaApi = true;
+          }
+        }
+      } catch (apiErr: any) {
+        if (apiErr.message && !apiErr.message.includes('JSON')) {
+          throw apiErr;
+        }
+      }
+
+      // If API returned HTML or serverless unavailable, update Firestore store directly
+      if (!handledViaApi) {
+        const store = await getClientStore();
+        const userIdx = store.users.findIndex((u) => u.id === currentUser.id);
+        if (userIdx === -1) {
+          throw new Error('الحساب غير موجود.');
+        }
+
+        const existing = store.users[userIdx];
+        if (existing.password && currentPassword.trim() && existing.password !== currentPassword.trim()) {
+          throw new Error('كلمة المرور الحالية غير صحيحة.');
+        }
+
+        const updatedRecord: UserType = {
+          ...existing,
+          username: newUsername.trim(),
+          password: newPassword.trim() || existing.password,
+          school: selectedSchool,
+        };
+
+        store.users[userIdx] = updatedRecord;
+        await saveClientStore(store);
+
+        const { password: _, ...safeUser } = updatedRecord;
+        updatedUser = safeUser as UserType;
       }
 
       setSuccess('تم تحديث وحفظ بيانات الحساب بنجاح.');
-      if (data.user) {
-        onUserUpdated(data.user);
+      if (updatedUser) {
+        onUserUpdated(updatedUser);
       }
       setTimeout(() => {
         onClose();

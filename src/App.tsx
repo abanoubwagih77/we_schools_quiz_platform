@@ -13,6 +13,7 @@ import { InstructorAccountsModal } from './components/InstructorAccountsModal';
 import { Quiz, QuizSession, User, TargetClass, QuizQuestion, WeekFolder } from './types';
 import { CheckCircle2, AlertTriangle, X } from 'lucide-react';
 import { WeLogo } from './components/WeLogo';
+import { getClientStore, saveClientStore } from './lib/firebaseStoreClient';
 
 export default function App() {
   // User state: restore session from localStorage if available
@@ -64,23 +65,44 @@ export default function App() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [quizzesRes, foldersRes, sessionsRes] = await Promise.all([
-        fetch('/api/quizzes'),
-        fetch('/api/folders'),
-        fetch('/api/sessions'),
-      ]);
+      let loadedFromApi = false;
 
-      if (quizzesRes.ok) {
-        const qData = await quizzesRes.json();
-        setQuizzes(qData);
+      try {
+        const [quizzesRes, foldersRes, sessionsRes] = await Promise.all([
+          fetch('/api/quizzes'),
+          fetch('/api/folders'),
+          fetch('/api/sessions'),
+        ]);
+
+        const isJson = (res: Response) => (res.headers.get('content-type') || '').includes('application/json');
+
+        if (quizzesRes.ok && isJson(quizzesRes)) {
+          const qData = await quizzesRes.json();
+          if (Array.isArray(qData)) {
+            setQuizzes(qData);
+            loadedFromApi = true;
+          }
+        }
+        if (foldersRes.ok && isJson(foldersRes)) {
+          const fData = await foldersRes.json();
+          if (Array.isArray(fData)) setFolders(fData);
+        }
+        if (sessionsRes.ok && isJson(sessionsRes)) {
+          const sData = await sessionsRes.json();
+          if (Array.isArray(sData)) setSessions(sData);
+        }
+      } catch (apiErr) {
+        console.warn('API fetch warning, falling back to direct Firestore:', apiErr);
       }
-      if (foldersRes.ok) {
-        const fData = await foldersRes.json();
-        setFolders(fData);
-      }
-      if (sessionsRes.ok) {
-        const sData = await sessionsRes.json();
-        setSessions(sData);
+
+      // If backend API is unavailable (e.g. static hosting on Vercel), load directly from Firestore
+      if (!loadedFromApi) {
+        const cloudStore = await getClientStore();
+        if (cloudStore) {
+          setQuizzes(cloudStore.quizzes || []);
+          setFolders(cloudStore.folders || []);
+          setSessions(cloudStore.sessions || []);
+        }
       }
     } catch (e) {
       console.error('Failed to load data:', e);

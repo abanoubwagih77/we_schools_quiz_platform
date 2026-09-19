@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { User as UserType, WE_SCHOOLS } from '../types';
 import { WeLogo } from './WeLogo';
+import { getClientStore } from '../lib/firebaseStoreClient';
 
 interface LoginPageProps {
   onLoginSuccess: (user: UserType, token: string) => void;
@@ -44,22 +45,81 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         return;
       }
 
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: username.trim(),
-          password: password.trim(),
-          school: selectedSchool,
-        }),
-      });
+      let loginOk = false;
+      let userData: UserType | null = null;
+      let tokenData: string = '';
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'فشل تسجيل الدخول. تأكد من البيانات.');
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: username.trim(),
+            password: password.trim(),
+            school: selectedSchool,
+          }),
+        });
+
+        // Verify that the response is actually valid JSON (not HTML 404/500 from Vercel)
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          if (res.ok && data?.user) {
+            loginOk = true;
+            userData = data.user;
+            tokenData = data.token;
+          } else if (!res.ok) {
+            throw new Error(data.error || 'فشل تسجيل الدخول. تأكد من البيانات.');
+          }
+        }
+      } catch (networkOrApiErr: any) {
+        if (networkOrApiErr.message && !networkOrApiErr.message.includes('JSON')) {
+          throw networkOrApiErr;
+        }
       }
 
-      onLoginSuccess(data.user, data.token);
+      // If backend API returned HTML or failed, authenticate directly via Cloud Firestore
+      if (!loginOk) {
+        const store = await getClientStore();
+        const found = store.users.find(
+          (u) => u.username.toLowerCase().trim() === username.toLowerCase().trim()
+        );
+
+        if (!found) {
+          throw new Error('اسم المستخدم أو كلمة المرور غير صحيحة.');
+        }
+
+        if (found.password && found.password !== password.trim()) {
+          throw new Error('كلمة المرور غير صحيحة.');
+        }
+
+        // Branch verification
+        if (found.school && selectedSchool) {
+          const normalize = (s: string) => s.toLowerCase().replace(/[-_•]/g, ' ').replace(/\s+/g, ' ').trim();
+          const userSchoolNorm = normalize(found.school);
+          const reqSchoolNorm = normalize(selectedSchool);
+
+          const branches = ['toukh', 'qena', 'asyut', 'damanhour', 'tor sinai', 'طوخ', 'قنا', 'أسيوط', 'دمنهور', 'طور سيناء'];
+          const userBranch = branches.find((b) => userSchoolNorm.includes(b));
+          const reqBranch = branches.find((b) => reqSchoolNorm.includes(b));
+
+          if (userBranch && reqBranch && userBranch !== reqBranch) {
+            throw new Error(`بيانات الدخول لا تتطابق مع الفرع المحدد. هذا الحساب مسجل ومخصص لـ (${found.school}). يرجى اختيار المدرسة الصحيحة من القائمة.`);
+          }
+        }
+
+        const activeSchool = found.school || selectedSchool || WE_SCHOOLS[0];
+        const { password: _, ...safeUser } = found;
+        userData = {
+          ...safeUser,
+          school: activeSchool,
+        };
+        tokenData = `token_${safeUser.id}_${Date.now()}`;
+      }
+
+      if (userData) {
+        onLoginSuccess(userData, tokenData);
+      }
     } catch (err: any) {
       setError(err.message || 'حدث خطأ أثناء تسجيل الدخول.');
     } finally {

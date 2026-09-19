@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, WE_SCHOOLS } from '../types';
 import { Users, UserPlus, Trash2, X, Shield, GraduationCap, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { getClientStore, saveClientStore } from '../lib/firebaseStoreClient';
 
 interface InstructorAccountsModalProps {
   onClose: () => void;
@@ -26,10 +27,22 @@ export const InstructorAccountsModal: React.FC<InstructorAccountsModalProps> = (
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/users');
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data);
+      let loaded = false;
+      try {
+        const res = await fetch('/api/users');
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setUsers(data);
+            loaded = true;
+          }
+        }
+      } catch (e) {}
+
+      if (!loaded) {
+        const store = await getClientStore();
+        setUsers(store.users.map(({ password: _, ...rest }) => rest as User));
       }
     } catch (err) {
       console.error('Failed to fetch users:', err);
@@ -54,21 +67,58 @@ export const InstructorAccountsModal: React.FC<InstructorAccountsModalProps> = (
 
     try {
       setSubmitting(true);
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      let created = false;
+
+      try {
+        const res = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: username.trim(),
+            password: password.trim(),
+            name: name.trim() || username.trim(),
+            school,
+            department: 'Information Technology (IT)',
+          }),
+        });
+
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || 'فشل إنشاء حساب المعلم.');
+          }
+          created = true;
+        }
+      } catch (apiErr: any) {
+        if (apiErr.message && !apiErr.message.includes('JSON')) {
+          throw apiErr;
+        }
+      }
+
+      // If backend API returned HTML or failed, write directly to Firestore
+      if (!created) {
+        const store = await getClientStore();
+        const existing = store.users.find(
+          (u) => u.username.toLowerCase().trim() === username.toLowerCase().trim()
+        );
+        if (existing) {
+          throw new Error('اسم المستخدم مستخدم بالفعل.');
+        }
+
+        const newUser: User = {
+          id: `user-inst-${Date.now()}`,
           username: username.trim(),
           password: password.trim(),
           name: name.trim() || username.trim(),
+          role: 'instructor',
           school,
           department: 'Information Technology (IT)',
-        }),
-      });
+          createdAt: new Date().toISOString(),
+        };
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'فشل إنشاء حساب المعلم.');
+        store.users.push(newUser);
+        await saveClientStore(store);
       }
 
       setSuccessMsg(`تم إنشاء حساب المعلم "${username}" بنجاح!`);
@@ -90,11 +140,22 @@ export const InstructorAccountsModal: React.FC<InstructorAccountsModalProps> = (
     }
 
     try {
-      const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'فشل حذف الحساب');
+      let deleted = false;
+      try {
+        const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          if (res.ok) deleted = true;
+        }
+      } catch (e) {}
+
+      if (!deleted) {
+        const store = await getClientStore();
+        store.users = store.users.filter((u) => u.id !== userId);
+        await saveClientStore(store);
       }
+
       setUsers((prev) => prev.filter((u) => u.id !== userId));
       setSuccessMsg(`تم حذف الحساب "${targetUsername}".`);
     } catch (err: any) {
