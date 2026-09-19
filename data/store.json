@@ -1,0 +1,17 @@
+{
+  "users": [
+    {
+      "id": "user-admin",
+      "username": "admin",
+      "password": "admin",
+      "name": "م/ أبانوب وجيه",
+      "role": "admin",
+      "school": "WE Applied Technology School - Toukh",
+      "department": "Information Technology (IT)"
+    }
+  ],
+  "folders": [],
+  "quizzes": [],
+  "sessions": [],
+  "logs": []
+}

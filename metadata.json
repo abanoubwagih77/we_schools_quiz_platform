@@ -1,0 +1,6 @@
+{
+  "name": "مادة تكنولوجيا المعلومات (IT) - مدارس WE",
+  "description": "منصة اختبارات مادة تكنولوجيا المعلومات (IT) وعرض الاختبارات التفاعلية على البروجكتور لمدارس WE للتكنولوجيا التطبيقية مع عداد تلقائي ومراجعة تفاعلية",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

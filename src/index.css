@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Prevent blinking text cursor / caret from appearing on text elements across the app */
+*, *::before, *::after {
+  caret-color: transparent;
+}
+
+/* Allow text cursor and editing only inside actual inputs and textareas */
+input, textarea, [contenteditable="true"] {
+  caret-color: auto;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Prevent accidental text cursor / caret selection on UI containers */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+/* Retain text selection capability where specifically needed */
+pre, code {
+  user-select: text;
+  -webkit-user-select: text;
+}
