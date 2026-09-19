@@ -10,10 +10,24 @@ import { LoginPage } from './components/LoginPage';
 import { AccountSettingsModal } from './components/AccountSettingsModal';
 import { FolderModal } from './components/FolderModal';
 import { InstructorAccountsModal } from './components/InstructorAccountsModal';
-import { Quiz, QuizSession, User, TargetClass, QuizQuestion, WeekFolder } from './types';
+import { Quiz, QuizSession, User, TargetClass, QuizQuestion, WeekFolder, WE_SCHOOLS } from './types';
 import { CheckCircle2, AlertTriangle, X } from 'lucide-react';
 import { WeLogo } from './components/WeLogo';
-import { getClientStore, saveClientStore } from './lib/firebaseStoreClient';
+import {
+  apiFetchAllData,
+  apiSaveQuiz,
+  apiDeleteQuiz,
+  apiToggleQuizStatus,
+  apiDuplicateQuiz,
+  apiSaveFolder,
+  apiDeleteFolder,
+  apiToggleFolderStatus,
+  apiStartLiveSession,
+  apiGetSession,
+  apiDeleteSession,
+  apiClearAllSessions,
+  apiFinishLiveSession,
+} from './lib/firebaseStoreClient';
 
 export default function App() {
   // User state: restore session from localStorage if available
@@ -65,52 +79,10 @@ export default function App() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      let loadedFromApi = false;
-
-      try {
-        const [quizzesRes, foldersRes, sessionsRes] = await Promise.all([
-          fetch('/api/quizzes'),
-          fetch('/api/folders'),
-          fetch('/api/sessions'),
-        ]);
-
-        const safeJson = async (res: Response) => {
-          try {
-            const txt = await res.text();
-            return txt && txt.trim() ? JSON.parse(txt) : null;
-          } catch {
-            return null;
-          }
-        };
-
-        if (quizzesRes.ok) {
-          const qData = await safeJson(quizzesRes);
-          if (Array.isArray(qData)) {
-            setQuizzes(qData);
-            loadedFromApi = true;
-          }
-        }
-        if (foldersRes.ok) {
-          const fData = await safeJson(foldersRes);
-          if (Array.isArray(fData)) setFolders(fData);
-        }
-        if (sessionsRes.ok) {
-          const sData = await safeJson(sessionsRes);
-          if (Array.isArray(sData)) setSessions(sData);
-        }
-      } catch (apiErr) {
-        console.warn('API fetch warning, falling back to direct Firestore:', apiErr);
-      }
-
-      // If backend API is unavailable (e.g. static hosting on Vercel), load directly from Firestore
-      if (!loadedFromApi) {
-        const cloudStore = await getClientStore();
-        if (cloudStore) {
-          setQuizzes(cloudStore.quizzes || []);
-          setFolders(cloudStore.folders || []);
-          setSessions(cloudStore.sessions || []);
-        }
-      }
+      const data = await apiFetchAllData();
+      setQuizzes(data.quizzes);
+      setFolders(data.folders);
+      setSessions(data.sessions);
     } catch (e) {
       console.error('Failed to load data:', e);
     } finally {
@@ -166,20 +138,14 @@ export default function App() {
     randomize: boolean;
   }) => {
     try {
-      const res = await fetch('/api/sessions/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          quizId: config.quizId,
-          school: config.school,
-          className: config.className,
-          instructorId: currentUser?.id || 'admin',
-          instructorName: currentUser?.name || currentUser?.username || 'Instructor',
-        }),
+      const data = await apiStartLiveSession({
+        quizId: config.quizId,
+        school: config.school,
+        className: config.className,
+        randomize: config.randomize,
+        instructorId: currentUser?.id || 'admin',
+        instructorName: currentUser?.name || currentUser?.username || 'Instructor',
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'فشل بدء الجلسة');
 
       setSessions((prev) => [data.session, ...prev]);
 
@@ -199,25 +165,12 @@ export default function App() {
   // RE-OPEN AN EXISTING SESSION (Review mode)
   const handleOpenHistoricalSession = async (session: QuizSession, mode: 'live' | 'review') => {
     try {
-      const res = await fetch(`/api/sessions/${session.id}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'فشل تحميل الجلسة');
-
-      if (mode === 'review') {
-        const revRes = await fetch(`/api/sessions/${session.id}/review`, { method: 'POST' });
-        const revData = await revRes.json();
-        setLiveState({
-          session: revData.session,
-          questions: revData.questions,
-          isReviewMode: true,
-        });
-      } else {
-        setLiveState({
-          session: data.session,
-          questions: data.questions,
-          isReviewMode: false,
-        });
-      }
+      const data = await apiGetSession(session.id, mode === 'review');
+      setLiveState({
+        session: data.session,
+        questions: data.questions,
+        isReviewMode: mode === 'review',
+      });
     } catch (err: any) {
       showToast(err.message || 'خطأ أثناء فتح الجلسة', 'error');
     }
@@ -227,9 +180,7 @@ export default function App() {
   const handleStartReviewFromLive = async () => {
     if (!liveState) return;
     try {
-      const res = await fetch(`/api/sessions/${liveState.session.id}/review`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'فشل فتح وضع المراجعة');
+      const data = await apiGetSession(liveState.session.id, true);
 
       setLiveState({
         session: data.session,
@@ -251,41 +202,31 @@ export default function App() {
   const handleFinishLiveSession = async () => {
     if (!liveState) return;
     try {
-      const res = await fetch(`/api/sessions/${liveState.session.id}/finish`, { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        setSessions((prev) =>
-          prev.map((s) => (s.id === data.id ? data : s))
-        );
-      }
+      await apiFinishLiveSession(liveState.session.id);
+      setSessions((prev) =>
+        prev.map((s) => (s.id === liveState.session.id ? { ...s, status: 'completed', completedAt: new Date().toISOString() } : s))
+      );
     } catch (e) {}
   };
 
   // SAVE OR UPDATE QUIZ
   const handleSaveQuiz = async (quizData: Partial<Quiz>) => {
     try {
-      if (editingQuiz) {
-        const res = await fetch(`/api/quizzes/${editingQuiz.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(quizData),
-        });
-        const updated = await res.json();
-        if (!res.ok) throw new Error(updated.error || 'فشل تحديث الاختبار');
+      const result = await apiSaveQuiz(
+        {
+          ...quizData,
+          creatorName: currentUser?.name || currentUser?.username || 'Admin',
+          creatorSchool: currentUser?.school || WE_SCHOOLS[0],
+        },
+        editingQuiz?.id
+      );
 
-        setQuizzes((prev) => prev.map((q) => (q.id === updated.id ? updated : q)));
-        showToast('تم تحديث بيانات الاختبار بنجاح.');
-      } else {
-        const res = await fetch('/api/quizzes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(quizData),
-        });
-        const created = await res.json();
-        if (!res.ok) throw new Error(created.error || 'فشل إنشاء الاختبار');
-
-        setQuizzes((prev) => [created, ...prev]);
+      if (result.isNew) {
+        setQuizzes((prev) => [result.quiz, ...prev]);
         showToast('تم حفظ الاختبار الجديد في البنك بنجاح.');
+      } else {
+        setQuizzes((prev) => prev.map((q) => (q.id === result.quiz.id ? result.quiz : q)));
+        showToast('تم تحديث بيانات الاختبار بنجاح.');
       }
 
       setEditingQuiz(null);
@@ -299,9 +240,7 @@ export default function App() {
   // DUPLICATE QUIZ
   const handleDuplicateQuiz = async (quizId: string) => {
     try {
-      const res = await fetch(`/api/quizzes/${quizId}/duplicate`, { method: 'POST' });
-      const dup = await res.json();
-      if (!res.ok) throw new Error(dup.error || 'فشل تكرار الاختبار');
+      const dup = await apiDuplicateQuiz(quizId);
       setQuizzes((prev) => [dup, ...prev]);
       showToast('تم نسخ الاختبار بنجاح.');
     } catch (err: any) {
@@ -312,22 +251,8 @@ export default function App() {
   // TOGGLE QUIZ STATUS
   const handleToggleQuizStatus = async (quizId: string, enabled: boolean) => {
     try {
-      const res = await fetch(`/api/quizzes/${quizId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: enabled ? 'enabled' : 'disabled' }),
-      });
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch (_) {}
-
-      if (!res.ok) {
-        throw new Error(data?.error || 'فشل تحديث الحالة');
-      }
-
-      const updated = data || { id: quizId, status: enabled ? 'enabled' : 'disabled' };
-      setQuizzes((prev) => prev.map((q) => (q.id === updated.id ? { ...q, ...updated } : q)));
+      const updated = await apiToggleQuizStatus(quizId, enabled);
+      setQuizzes((prev) => prev.map((q) => (q.id === updated.id ? updated : q)));
       showToast(`تم ${enabled ? 'تفعيل' : 'تعطيل'} الاختبار بنجاح.`);
     } catch (err: any) {
       showToast(err.message || 'فشل تحديث حالة الاختبار', 'error');
@@ -336,25 +261,10 @@ export default function App() {
 
   // TOGGLE FOLDER STATUS
   const handleToggleFolderStatus = async (folderId: string, currentStatus: 'enabled' | 'disabled') => {
-    const nextStatus = currentStatus === 'enabled' ? 'disabled' : 'enabled';
     try {
-      const res = await fetch(`/api/folders/${folderId}/status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus }),
-      });
-      let data: any = null;
-      try {
-        data = await res.json();
-      } catch (_) {}
-
-      if (!res.ok) {
-        throw new Error(data?.error || 'فشل تحديث حالة المجلد');
-      }
-
-      const updated = data || { id: folderId, status: nextStatus };
-      setFolders((prev) => prev.map((f) => (f.id === updated.id ? { ...f, ...updated } : f)));
-      showToast(`تم ${nextStatus === 'enabled' ? 'تفعيل' : 'تعطيل'} المجلد الأسبوعي.`);
+      const updated = await apiToggleFolderStatus(folderId, currentStatus);
+      setFolders((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+      showToast(`تم ${updated.status === 'enabled' ? 'تفعيل' : 'تعطيل'} المجلد الأسبوعي.`);
     } catch (err: any) {
       showToast(err.message || 'خطأ أثناء تغيير حالة المجلد', 'error');
     }
@@ -363,15 +273,7 @@ export default function App() {
   // DELETE SINGLE SESSION
   const handleDeleteSession = async (sessionId: string) => {
     try {
-      const res = await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        let errMsg = 'فشل حذف جلسة الاختبار';
-        try {
-          const errData = await res.json();
-          if (errData?.error) errMsg = errData.error;
-        } catch (_) {}
-        throw new Error(errMsg);
-      }
+      await apiDeleteSession(sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       showToast('تم حذف جلسة الاختبار بنجاح.');
     } catch (err: any) {
@@ -382,15 +284,7 @@ export default function App() {
   // CLEAR ALL SESSIONS
   const handleClearAllSessions = async () => {
     try {
-      const res = await fetch('/api/sessions', { method: 'DELETE' });
-      if (!res.ok) {
-        let errMsg = 'فشل مسح الجلسات';
-        try {
-          const errData = await res.json();
-          if (errData?.error) errMsg = errData.error;
-        } catch (_) {}
-        throw new Error(errMsg);
-      }
+      await apiClearAllSessions();
       setSessions([]);
       showToast('تم مسح جميع جلسات الاختبار بنجاح للبدء من جديد.');
     } catch (err: any) {
@@ -401,11 +295,7 @@ export default function App() {
   // DELETE QUIZ DIRECTLY (invoked after confirmation in QuizList)
   const handleDeleteQuiz = async (quizId: string) => {
     try {
-      const res = await fetch(`/api/quizzes/${quizId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'فشل حذف الاختبار');
-      }
+      await apiDeleteQuiz(quizId);
       setQuizzes((prev) => prev.filter((q) => q.id !== quizId));
       showToast('تم حذف الاختبار بنجاح من قاعدة البيانات.');
     } catch (err: any) {
@@ -416,11 +306,7 @@ export default function App() {
   // DELETE FOLDER DIRECTLY (invoked after confirmation in QuizList)
   const handleDeleteFolder = async (folderId: string) => {
     try {
-      const res = await fetch(`/api/folders/${folderId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'فشل حذف المجلد');
-      }
+      await apiDeleteFolder(folderId);
       setFolders((prev) => prev.filter((f) => f.id !== folderId));
       setQuizzes((prev) =>
         prev.map((q) => (q.folderId === folderId ? { ...q, folderId: undefined } : q))
@@ -439,27 +325,12 @@ export default function App() {
     status: 'enabled' | 'disabled';
   }) => {
     try {
+      const saved = await apiSaveFolder(data, folderToEdit?.id);
       if (folderToEdit) {
-        const res = await fetch(`/api/folders/${folderToEdit.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
-        const updated = await res.json();
-        if (!res.ok) throw new Error(updated.error || 'فشل تحديث المجلد');
-
-        setFolders((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+        setFolders((prev) => prev.map((f) => (f.id === saved.id ? saved : f)));
         showToast('تم تحديث بيانات المجلد الأسبوعي.');
       } else {
-        const res = await fetch('/api/folders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
-        const created = await res.json();
-        if (!res.ok) throw new Error(created.error || 'فشل إنشاء المجلد');
-
-        setFolders((prev) => [...prev, created]);
+        setFolders((prev) => [...prev, saved]);
         showToast('تم إنشاء المجلد الأسبوعي الجديد.');
       }
       setFolderModalOpen(false);

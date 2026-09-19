@@ -18,6 +18,7 @@ import {
   TargetClass,
   TARGET_CLASSES,
 } from '../types';
+import { getClientStore, saveClientStore } from '../lib/firebaseStoreClient';
 
 interface ClassStat {
   tested: boolean;
@@ -52,10 +53,72 @@ export const SchoolActivityView: React.FC<SchoolActivityViewProps> = ({ onOpenSe
   const fetchSummary = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/activity/school-summary');
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
+      let loaded = false;
+      try {
+        const res = await fetch('/api/activity/school-summary');
+        const txt = await res.text();
+        if (res.ok && txt) {
+          const json = JSON.parse(txt);
+          if (json && json.schools) {
+            setData(json);
+            loaded = true;
+          }
+        }
+      } catch (e) {}
+
+      if (!loaded) {
+        const store = await getClientStore();
+        const schoolMap: Record<string, {
+          totalSessions: number;
+          testedClasses: Set<TargetClass>;
+          classBreakdown: Record<string, ClassStat>;
+          sessions: QuizSession[];
+          lastActivity: string;
+        }> = {};
+
+        // Group sessions by school
+        (store.sessions || []).forEach((s) => {
+          const scName = s.school || 'Unknown School';
+          if (!schoolMap[scName]) {
+            schoolMap[scName] = {
+              totalSessions: 0,
+              testedClasses: new Set<TargetClass>(),
+              classBreakdown: {},
+              sessions: [],
+              lastActivity: s.startedAt,
+            };
+          }
+          const item = schoolMap[scName];
+          item.totalSessions++;
+          if (s.className) item.testedClasses.add(s.className);
+          item.sessions.push(s);
+          if (new Date(s.startedAt) > new Date(item.lastActivity)) {
+            item.lastActivity = s.startedAt;
+          }
+
+          const cls = s.className || 'Unknown';
+          if (!item.classBreakdown[cls]) {
+            item.classBreakdown[cls] = { tested: true, sessionCount: 0, quizzes: [] };
+          }
+          item.classBreakdown[cls].sessionCount++;
+          if (s.quizTitle && !item.classBreakdown[cls].quizzes.includes(s.quizTitle)) {
+            item.classBreakdown[cls].quizzes.push(s.quizTitle);
+          }
+        });
+
+        const schoolsList: ActiveSchoolSummary[] = Object.entries(schoolMap).map(([schoolName, val]) => ({
+          schoolName,
+          totalSessions: val.totalSessions,
+          testedClasses: Array.from(val.testedClasses),
+          classBreakdown: val.classBreakdown,
+          sessions: val.sessions,
+          lastActivity: val.lastActivity,
+        }));
+
+        setData({
+          schools: schoolsList,
+          logs: store.logs || [],
+        });
       }
     } catch (e) {
       console.error('Failed to load school summary:', e);
@@ -67,12 +130,18 @@ export const SchoolActivityView: React.FC<SchoolActivityViewProps> = ({ onOpenSe
   const handleDeleteSchool = async (schoolName: string) => {
     try {
       setActionLoading(true);
-      const res = await fetch(`/api/activity/school/${encodeURIComponent(schoolName)}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        await fetchSummary();
-      }
+      try {
+        await fetch(`/api/activity/school/${encodeURIComponent(schoolName)}`, {
+          method: 'DELETE',
+        });
+      } catch (e) {}
+
+      const store = await getClientStore();
+      store.sessions = store.sessions.filter((s) => s.school !== schoolName);
+      store.logs = store.logs.filter((l) => l.school !== schoolName);
+      await saveClientStore(store);
+
+      await fetchSummary();
     } catch (e) {
       console.error('Failed to delete school activity:', e);
     } finally {
@@ -84,8 +153,16 @@ export const SchoolActivityView: React.FC<SchoolActivityViewProps> = ({ onOpenSe
   const handleClearAllActivity = async () => {
     try {
       setActionLoading(true);
-      await fetch('/api/sessions', { method: 'DELETE' });
-      await fetch('/api/activity/logs', { method: 'DELETE' });
+      try {
+        await fetch('/api/sessions', { method: 'DELETE' });
+        await fetch('/api/activity/logs', { method: 'DELETE' });
+      } catch (e) {}
+
+      const store = await getClientStore();
+      store.sessions = [];
+      store.logs = [];
+      await saveClientStore(store);
+
       await fetchSummary();
     } catch (e) {
       console.error('Failed to clear activity:', e);
