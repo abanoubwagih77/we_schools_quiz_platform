@@ -25,7 +25,7 @@ export const WE_SCHOOL_SHORT_NAMES = [
   'Qena',
 ] as const;
 
-export type QuestionType = 'mcq' | 'true_false' | 'essay' | 'matching';
+export type QuestionType = 'mcq' | 'true_false' | 'essay' | 'matching' | 'complete';
 
 export interface MatchingItem {
   id: string;
@@ -66,7 +66,13 @@ export interface MatchingQuestion extends BaseQuestion {
   correctPairs: { leftId: string; rightId: string }[];
 }
 
-export type QuizQuestion = MCQQuestion | TrueFalseQuestion | EssayQuestion | MatchingQuestion;
+export interface CompleteQuestion extends BaseQuestion {
+  type: 'complete';
+  correctAnswer: string;
+  acceptableAnswers?: string[];
+}
+
+export type QuizQuestion = MCQQuestion | TrueFalseQuestion | EssayQuestion | MatchingQuestion | CompleteQuestion;
 
 export interface WeekFolder {
   id: string;

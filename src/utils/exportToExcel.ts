@@ -51,6 +51,13 @@ export function exportQuizzesToExcel({
         typeArabic = 'صح أو خطأ (True / False)';
         optionsStr = 'A) TRUE\nB) FALSE';
         correctAnswerStr = q.correctBoolean ? 'TRUE (صح)' : 'FALSE (خطأ)';
+      } else if (q.type === 'complete') {
+        typeArabic = 'أكمل الفراغ (Complete)';
+        optionsStr = 'سؤال إكمال فراغ - لا توجد خيارات متعددة';
+        const alternates = q.acceptableAnswers && q.acceptableAnswers.length > 0
+          ? ` (بدائل مقبولة: ${q.acceptableAnswers.join(' / ')})`
+          : '';
+        correctAnswerStr = `${q.correctAnswer || '—'}${alternates}`;
       } else if (q.type === 'essay') {
         typeArabic = 'سؤال مقالي / مفهوم علمي (Essay)';
         optionsStr = 'سؤال مقالي - لا توجد خيارات متعددة';

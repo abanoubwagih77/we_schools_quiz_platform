@@ -22,6 +22,7 @@ import {
   TrueFalseQuestion,
   EssayQuestion,
   MatchingQuestion,
+  CompleteQuestion,
   User,
   WeekFolder,
 } from '../types';
@@ -113,6 +114,16 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
         timeLimitSeconds: 90,
         modelAnswer: '',
         keyPoints: [],
+      };
+    } else if (type === 'complete') {
+      newQ = {
+        id: newId,
+        type: 'complete',
+        prompt: 'Fill in the blank: ............',
+        timeLimitSeconds: 45,
+        correctAnswer: '',
+        acceptableAnswers: [],
+        explanation: '',
       };
     } else {
       newQ = {
@@ -400,11 +411,11 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => addQuestion('essay')}
+                  onClick={() => addQuestion('complete')}
                   className="py-1.5 px-2 bg-white hover:bg-purple-50 text-slate-700 hover:text-[#5E2777] font-bold text-[11px] rounded-lg border border-purple-100 transition-all flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <Plus className="w-3 h-3" />
-                  <span>سؤال مقالي (Essay)</span>
+                  <span>أكمل الفراغ (Complete)</span>
                 </button>
 
                 <button
@@ -414,6 +425,15 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
                 >
                   <Plus className="w-3 h-3" />
                   <span>توصيل (Matching)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => addQuestion('essay')}
+                  className="col-span-2 py-1.5 px-2 bg-white hover:bg-purple-50 text-slate-700 hover:text-[#5E2777] font-bold text-[11px] rounded-lg border border-purple-100 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>سؤال مقالي (Essay)</span>
                 </button>
               </div>
             </div>
@@ -426,13 +446,15 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                   <div className="flex items-center gap-2">
                     <span className="px-2.5 py-0.5 bg-purple-50 text-[#5E2777] rounded-lg text-xs font-bold border border-purple-200">
-                      السؤال رقم {activeQuestionIndex + 1}
+                       السؤال رقم {activeQuestionIndex + 1}
                     </span>
                     <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       {activeQ.type === 'mcq'
                         ? 'اختيار من متعدد'
                         : activeQ.type === 'true_false'
                         ? 'صح أو خطأ'
+                        : activeQ.type === 'complete'
+                        ? 'أكمل الفراغ (Complete)'
                         : activeQ.type === 'essay'
                         ? 'سؤال مقالي'
                         : 'توصيل'}
@@ -526,21 +548,6 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
                     onChange={(e) => updateActiveQuestion({ prompt: e.target.value })}
                     placeholder="Enter the IT question prompt in English (e.g. What is the default subnet mask for a Class C IP address?)..."
                     className="w-full px-3.5 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-[#5E2777] outline-none text-slate-900 resize-none font-medium text-left"
-                  />
-                </div>
-
-                {/* Optional code snippet */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    كود / إعدادات سيسكو أو شبكات إضافية (اختياري)
-                  </label>
-                  <textarea
-                    rows={2}
-                    dir="ltr"
-                    value={activeQ.codeSnippet || ''}
-                    onChange={(e) => updateActiveQuestion({ codeSnippet: e.target.value || undefined })}
-                    placeholder="e.g. ping 192.168.1.1 -t or Router(config-if)# ip address 10.0.0.1..."
-                    className="w-full px-3 py-2 text-xs font-mono bg-slate-900 text-slate-100 border border-slate-800 rounded-xl outline-none resize-none text-left"
                   />
                 </div>
 
@@ -699,6 +706,51 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
                           />
                         ))}
                       </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. COMPLETE / FILL IN THE BLANK */}
+                {activeQ.type === 'complete' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                        <span>الكلمة أو العبارة الصحيحة لإكمال الفراغ (Correct Answer / Word):</span>
+                        <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={(activeQ as CompleteQuestion).correctAnswer || ''}
+                        onChange={(e) =>
+                          updateActiveQuestion({ correctAnswer: e.target.value } as any)
+                        }
+                        placeholder="e.g. Router, HTTPS, Transport Layer, 192.168.1.1"
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-[#5E2777] text-left"
+                      />
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        سيتم عرض هذه الإجابة النموذجية في وضع مراجعة البروجيكتور وعند تصدير ملفات الإكسيل.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        إجابات بديلة مقبولة (Acceptable Alternative Answers - مفصولة بفواصل):
+                      </label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={((activeQ as CompleteQuestion).acceptableAnswers || []).join(', ')}
+                        onChange={(e) => {
+                          const list = e.target.value
+                            .split(',')
+                            .map((s) => s.trim())
+                            .filter(Boolean);
+                          updateActiveQuestion({ acceptableAnswers: list } as any);
+                        }}
+                        placeholder="e.g. router, default gateway (optional)"
+                        className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl outline-none text-left"
+                      />
                     </div>
                   </div>
                 )}

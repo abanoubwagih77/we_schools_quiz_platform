@@ -29,6 +29,7 @@ import {
   TrueFalseQuestion,
   EssayQuestion,
   MatchingQuestion,
+  CompleteQuestion,
 } from '../types';
 import { soundFx } from '../utils/audio';
 import { exportQuizzesToExcel } from '../utils/exportToExcel';
@@ -445,6 +446,7 @@ export const LiveProjectorScreen: React.FC<Props> = ({
               <span className="text-xs text-slate-500 font-bold">
                 {currentQ.type === 'mcq' && 'Multiple Choice (اختيار من متعدد)'}
                 {currentQ.type === 'true_false' && 'True / False (صح أو خطأ)'}
+                {currentQ.type === 'complete' && 'Complete / Fill-in the Blank (أكمل الفراغ)'}
                 {currentQ.type === 'essay' && 'Concept / Short Essay (مفهوم علمي)'}
                 {currentQ.type === 'matching' && 'Matching Items (توصيل)'}
               </span>
@@ -484,6 +486,7 @@ export const LiveProjectorScreen: React.FC<Props> = ({
             {/* Render based on question type */}
             {currentQ.type === 'mcq' && renderMCQ(currentQ as MCQQuestion)}
             {currentQ.type === 'true_false' && renderTrueFalse(currentQ as TrueFalseQuestion)}
+            {currentQ.type === 'complete' && renderComplete(currentQ as CompleteQuestion)}
             {currentQ.type === 'essay' && renderEssay(currentQ as EssayQuestion)}
             {currentQ.type === 'matching' && renderMatching(currentQ as MatchingQuestion)}
 
@@ -681,6 +684,55 @@ export const LiveProjectorScreen: React.FC<Props> = ({
             </div>
           );
         })}
+      </div>
+    );
+  }
+
+  function renderComplete(q: CompleteQuestion) {
+    return (
+      <div className="space-y-4 pt-2 text-left" dir="ltr">
+        {/* Projector Live Mode Card */}
+        <div className="p-8 sm:p-10 rounded-3xl bg-slate-50/90 border-2 border-dashed border-purple-200 text-slate-700 flex flex-col items-center justify-center text-center">
+          <div className="w-14 h-14 rounded-2xl bg-purple-100 text-[#5E2777] flex items-center justify-center mb-3 shadow-xs">
+            <Sparkles className="w-7 h-7" />
+          </div>
+          <div className="text-lg sm:text-xl font-bold text-slate-800">Fill in the Blank / Complete the Statement</div>
+          <div className="text-xs sm:text-sm text-slate-500 max-w-md mt-1 font-medium">
+            Identify the missing term or technical concept to complete the sentence.
+          </div>
+
+          {/* Prompt with styled blank line placeholder */}
+          <div className="mt-6 px-6 py-3.5 rounded-2xl bg-white border border-purple-200 text-base sm:text-lg font-mono font-bold text-purple-950 shadow-xs flex items-center gap-2">
+            <span>[ Missing Concept:</span>
+            <span className="inline-block w-32 border-b-2 border-purple-600 border-dashed animate-pulse text-center text-purple-400">
+              ? ? ? ? ?
+            </span>
+            <span>]</span>
+          </div>
+        </div>
+
+        {/* Review Mode: Reveal Correct Answer */}
+        {isReviewMode && (
+          <div className="p-6 rounded-3xl bg-emerald-50/80 border-2 border-emerald-400 text-emerald-950 space-y-3 shadow-xs animate-in fade-in duration-200">
+            <div className="text-xs font-bold text-emerald-800 flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <span className="text-sm">Correct Missing Term (الإجابة النموذجية):</span>
+            </div>
+
+            <div className="text-2xl sm:text-3xl font-black font-mono tracking-wide text-emerald-900 bg-white px-5 py-3 rounded-2xl border border-emerald-300 inline-block shadow-xs">
+              {q.correctAnswer}
+            </div>
+
+            {q.acceptableAnswers && q.acceptableAnswers.length > 0 && (
+              <div className="text-xs text-emerald-800/90 font-medium flex items-center gap-2 pt-1">
+                <span className="font-bold">Also Acceptable:</span>
+                <span className="font-mono bg-emerald-100/80 px-2.5 py-1 rounded-lg">
+                  {q.acceptableAnswers.join(' , ')}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
