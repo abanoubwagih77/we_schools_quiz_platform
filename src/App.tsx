@@ -66,6 +66,7 @@ export default function App() {
   } | null>(null);
 
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
@@ -74,6 +75,90 @@ export default function App() {
       setNotification(null);
     }, 4000);
   };
+
+  // Auto-logout after 5 minutes of continuous inactivity (unless live quiz / projector is active)
+  const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 continuous minutes
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let lastActivityTime = Date.now();
+
+    const registerActivity = () => {
+      lastActivityTime = Date.now();
+    };
+
+    const trackedEvents = [
+      'mousemove',
+      'mousedown',
+      'keydown',
+      'touchstart',
+      'scroll',
+      'wheel',
+      'click',
+    ];
+
+    trackedEvents.forEach((evt) => {
+      window.addEventListener(evt, registerActivity, { passive: true });
+    });
+
+    const triggerAutoLogout = () => {
+      // Close any open modals
+      setSetupQuizForLive(null);
+      setEditingQuiz(null);
+      setIsCreatingNewQuiz(false);
+      setTargetFolderForNewQuiz(undefined);
+      setShowAccountSettings(false);
+      setShowInstructorAccounts(false);
+      setFolderModalOpen(false);
+      setFolderToEdit(null);
+      setLiveState(null);
+
+      // Perform clean logout
+      setCurrentUser(null);
+      setActiveTab('quizzes');
+      try {
+        localStorage.removeItem('we_quiz_user');
+        localStorage.removeItem('we_quiz_token');
+      } catch (e) {}
+
+      setSessionExpiredNotice(
+        'تم تسجيل الخروج تلقائياً لعدم وجود أي نشاط لمدة 5 دقائق متواصلة حفاظاً على أمان حسابك.'
+      );
+    };
+
+    // Check every 5 seconds
+    const intervalId = setInterval(() => {
+      // If live projector screen or review is currently running, keep session active
+      if (liveState) {
+        lastActivityTime = Date.now();
+        return;
+      }
+
+      if (Date.now() - lastActivityTime >= IDLE_TIMEOUT_MS) {
+        triggerAutoLogout();
+      }
+    }, 5000);
+
+    // Also check on tab focus/visibility
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (!liveState && Date.now() - lastActivityTime >= IDLE_TIMEOUT_MS) {
+          triggerAutoLogout();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      trackedEvents.forEach((evt) => {
+        window.removeEventListener(evt, registerActivity);
+      });
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(intervalId);
+    };
+  }, [currentUser, liveState]);
 
   // Fetch initial data (quizzes, folders, and sessions)
   const fetchData = async () => {
@@ -98,6 +183,7 @@ export default function App() {
 
   // Handle successful login
   const handleLoginSuccess = (user: User, token: string) => {
+    setSessionExpiredNotice(null);
     setCurrentUser(user);
     // Always navigate directly to the quizzes and folders tab on login
     setActiveTab('quizzes');
@@ -112,6 +198,7 @@ export default function App() {
 
   // Handle logout
   const handleLogout = () => {
+    setSessionExpiredNotice(null);
     setCurrentUser(null);
     setActiveTab('quizzes');
     try {
@@ -342,7 +429,12 @@ export default function App() {
 
   // If user is not authenticated, show the Login Page
   if (!currentUser) {
-    return <LoginPage onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <LoginPage
+        onLoginSuccess={handleLoginSuccess}
+        sessionExpiredMessage={sessionExpiredNotice}
+      />
+    );
   }
 
   return (

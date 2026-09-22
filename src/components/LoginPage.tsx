@@ -5,6 +5,7 @@ import {
   ShieldCheck,
   AlertCircle,
   School,
+  Clock,
 } from 'lucide-react';
 import { User as UserType, WE_SCHOOLS } from '../types';
 import { WeLogo } from './WeLogo';
@@ -12,6 +13,7 @@ import { getClientStore } from '../lib/firebaseStoreClient';
 
 interface LoginPageProps {
   onLoginSuccess: (user: UserType, token: string) => void;
+  sessionExpiredMessage?: string | null;
 }
 
 // School Arabic Labels mapping
@@ -25,6 +27,7 @@ const SCHOOL_ARABIC_NAMES: Record<string, string> = {
 
 export const LoginPage: React.FC<LoginPageProps> = ({
   onLoginSuccess,
+  sessionExpiredMessage,
 }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -153,6 +156,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         <div className="bg-white py-8 px-6 sm:px-10 rounded-3xl border border-purple-100 shadow-xl shadow-purple-900/5">
           {/* Form */}
           <form className="space-y-4" onSubmit={handleSubmit}>
+            {/* Auto-logout / Session expired notification */}
+            {sessionExpiredMessage && !error && (
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center gap-2.5 font-bold shadow-xs">
+                <Clock className="w-4 h-4 shrink-0 text-amber-600" />
+                <span className="leading-relaxed">{sessionExpiredMessage}</span>
+              </div>
+            )}
+
             {/* Error message */}
             {error && (
               <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
