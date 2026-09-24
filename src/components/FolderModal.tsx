@@ -5,7 +5,7 @@ import { FolderPlus, FolderEdit, X, Check, Lock, Unlock } from 'lucide-react';
 interface FolderModalProps {
   folder?: WeekFolder | null;
   onClose: () => void;
-  onSave: (data: { title: string; weekNumber?: number; description?: string; status: 'enabled' | 'disabled' }) => void;
+  onSave: (data: { title: string; weekNumber?: number; description?: string; status: 'enabled' | 'disabled' }) => Promise<void> | void;
 }
 
 export const FolderModal: React.FC<FolderModalProps> = ({
@@ -18,19 +18,29 @@ export const FolderModal: React.FC<FolderModalProps> = ({
   const [description, setDescription] = useState(folder ? folder.description || '' : '');
   const [status, setStatus] = useState<'enabled' | 'disabled'>(folder ? folder.status : 'enabled');
   const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
       setError('يرجى إدخال عنوان للمجلد الأسبوعي.');
       return;
     }
-    onSave({
-      title: title.trim(),
-      weekNumber: Number(weekNumber) || undefined,
-      description: description.trim(),
-      status,
-    });
+    setError(null);
+    setIsSaving(true);
+    try {
+      await onSave({
+        title: title.trim(),
+        weekNumber: Number(weekNumber) || undefined,
+        description: description.trim(),
+        status,
+      });
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || 'حدث خطأ أثناء حفظ المجلد.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -156,16 +166,27 @@ export const FolderModal: React.FC<FolderModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+              disabled={isSaving}
+              className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
             >
               إلغاء
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-bold text-white bg-[#5E2777] hover:bg-[#4d1f63] rounded-xl shadow-md shadow-[#5E2777]/20 transition-colors flex items-center gap-2 cursor-pointer"
+              disabled={isSaving}
+              className="px-5 py-2 text-xs font-bold text-white bg-[#5E2777] hover:bg-[#4d1f63] rounded-xl shadow-md shadow-[#5E2777]/20 transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-60"
             >
-              <Check className="w-4 h-4" />
-              <span>{folder ? 'حفظ التعديلات' : 'إنشاء المجلد الأسبوعي'}</span>
+              {isSaving ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>جاري الحفظ...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>{folder ? 'حفظ التعديلات' : 'إنشاء المجلد الأسبوعي'}</span>
+                </>
+              )}
             </button>
           </div>
         </form>

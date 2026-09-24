@@ -246,6 +246,7 @@ export default function App() {
       showToast(`بدأ العرض المباشر على شاشة البروجيكتور لفصل ${config.className}`);
     } catch (err: any) {
       showToast(err.message || 'خطأ أثناء بدء الجلسة', 'error');
+      throw err;
     }
   };
 
@@ -310,10 +311,10 @@ export default function App() {
 
       if (result.isNew) {
         setQuizzes((prev) => [result.quiz, ...prev]);
-        showToast('تم حفظ الاختبار الجديد في البنك بنجاح.');
+        showToast('تم حفظ وإنشاء الاختبار الجديد بنجاح.');
       } else {
         setQuizzes((prev) => prev.map((q) => (q.id === result.quiz.id ? result.quiz : q)));
-        showToast('تم تحديث بيانات الاختبار بنجاح.');
+        showToast('تم حفظ تعديلات الاختبار بنجاح.');
       }
 
       setEditingQuiz(null);
@@ -321,6 +322,7 @@ export default function App() {
       setTargetFolderForNewQuiz(undefined);
     } catch (err: any) {
       showToast(err.message || 'خطأ أثناء حفظ الاختبار', 'error');
+      throw err;
     }
   };
 
@@ -384,9 +386,10 @@ export default function App() {
     try {
       await apiDeleteQuiz(quizId);
       setQuizzes((prev) => prev.filter((q) => q.id !== quizId));
-      showToast('تم حذف الاختبار بنجاح من قاعدة البيانات.');
+      showToast('تم حذف الاختبار بنجاح.');
     } catch (err: any) {
       showToast(err.message || 'خطأ أثناء حذف الاختبار', 'error');
+      throw err;
     }
   };
 
@@ -401,6 +404,7 @@ export default function App() {
       showToast('تم حذف المجلد الأسبوعي بنجاح.');
     } catch (err: any) {
       showToast(err.message || 'خطأ أثناء حذف المجلد', 'error');
+      throw err;
     }
   };
 
@@ -415,15 +419,16 @@ export default function App() {
       const saved = await apiSaveFolder(data, folderToEdit?.id);
       if (folderToEdit) {
         setFolders((prev) => prev.map((f) => (f.id === saved.id ? saved : f)));
-        showToast('تم تحديث بيانات المجلد الأسبوعي.');
+        showToast('تم حفظ التعديلات على المجلد الأسبوعي بنجاح.');
       } else {
         setFolders((prev) => [...prev, saved]);
-        showToast('تم إنشاء المجلد الأسبوعي الجديد.');
+        showToast('تم إنشاء المجلد الأسبوعي الجديد بنجاح.');
       }
       setFolderModalOpen(false);
       setFolderToEdit(null);
     } catch (err: any) {
       showToast(err.message || 'خطأ أثناء حفظ المجلد', 'error');
+      throw err;
     }
   };
 

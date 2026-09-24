@@ -34,7 +34,7 @@ interface QuizEditorModalProps {
   initialFolderId?: string;
   currentUser: User | null;
   onClose: () => void;
-  onSave: (quizData: Partial<Quiz>) => void;
+  onSave: (quizData: Partial<Quiz>) => Promise<void> | void;
   isDark?: boolean;
 }
 
@@ -70,6 +70,7 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
   const [questions, setQuestions] = useState<QuizQuestion[]>(quiz?.questions || []);
   const [activeQuestionIndex, setActiveQuestionIndex] = useState<number>(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   const toggleTargetClass = (cls: TargetClass) => {
     if (targetClasses.includes(cls)) {
@@ -184,7 +185,7 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
     setQuestions(updated);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim()) {
       setErrorMsg('يرجى كتابة عنوان للاختبار.');
       return;
@@ -195,17 +196,26 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
       return;
     }
 
-    onSave({
-      folderId,
-      title: title.trim(),
-      topic: topic.trim(),
-      subject: subject.trim(),
-      description: description.trim(),
-      targetClasses,
-      questions,
-      creatorName: currentUser?.name || currentUser?.username || 'م/ أبانوب وجيه',
-      creatorSchool: currentUser?.school || 'مدرسة WE للتكنولوجيا التطبيقية بطوخ',
-    });
+    setErrorMsg(null);
+    setIsSaving(true);
+    try {
+      await onSave({
+        folderId,
+        title: title.trim(),
+        topic: topic.trim(),
+        subject: subject.trim(),
+        description: description.trim(),
+        targetClasses,
+        questions,
+        creatorName: currentUser?.name || currentUser?.username || 'م/ أبانوب وجيه',
+        creatorSchool: currentUser?.school || 'مدرسة WE للتكنولوجيا التطبيقية بطوخ',
+      });
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(err?.message || 'حدث خطأ أثناء حفظ الاختبار.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const activeQ = questions[activeQuestionIndex];
@@ -791,11 +801,21 @@ export const QuizEditorModal: React.FC<QuizEditorModalProps> = ({
 
           <button
             type="button"
+            disabled={isSaving}
             onClick={handleSave}
-            className="px-6 py-2 bg-[#5E2777] hover:bg-[#4d1f63] text-white text-xs font-bold rounded-xl shadow-md shadow-[#5E2777]/20 transition-all flex items-center gap-1.5 cursor-pointer"
+            className="px-6 py-2 bg-[#5E2777] hover:bg-[#4d1f63] text-white text-xs font-bold rounded-xl shadow-md shadow-[#5E2777]/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
           >
-            <Save className="w-4 h-4" />
-            <span>حفظ ونشر الاختبار</span>
+            {isSaving ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>جاري الحفظ...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>{quiz ? 'حفظ التعديلات' : 'حفظ ونشر الاختبار'}</span>
+              </>
+            )}
           </button>
         </div>
       </div>

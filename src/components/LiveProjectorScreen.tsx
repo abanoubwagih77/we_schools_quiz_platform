@@ -346,6 +346,27 @@ export const LiveProjectorScreen: React.FC<Props> = ({
     );
   }
 
+  // Guard for empty questions or invalid state
+  if (!questions || questions.length === 0 || !currentQ) {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-900 text-white flex flex-col items-center justify-center p-6 text-center select-none" dir="rtl">
+        <div className="w-16 h-16 rounded-3xl bg-purple-900/50 border border-purple-500/30 flex items-center justify-center mb-4">
+          <BookOpen className="w-8 h-8 text-purple-300" />
+        </div>
+        <h2 className="text-xl sm:text-2xl font-bold mb-2">لا توجد أسئلة مضافة في هذا الاختبار</h2>
+        <p className="text-sm text-slate-400 mb-6 max-w-md">يرجى إضافة أسئلة للاختبار أولاً قبل تشغيله على شاشة البروجيكتور.</p>
+        <button
+          onClick={onExit}
+          className="px-6 py-2.5 bg-[#5E2777] hover:bg-[#4d1f63] text-white font-bold rounded-xl text-sm transition-all cursor-pointer"
+        >
+          العودة للوحة التحكم
+        </button>
+      </div>
+    );
+  }
+
+  const qType = currentQ.type || (Array.isArray((currentQ as any)?.options) ? 'mcq' : 'true_false');
+
   return (
     <div
       ref={containerRef}
@@ -444,11 +465,11 @@ export const LiveProjectorScreen: React.FC<Props> = ({
                 السؤال {currentIndex + 1} من {questions.length}
               </span>
               <span className="text-xs text-slate-500 font-bold">
-                {currentQ.type === 'mcq' && 'Multiple Choice (اختيار من متعدد)'}
-                {currentQ.type === 'true_false' && 'True / False (صح أو خطأ)'}
-                {currentQ.type === 'complete' && 'Complete / Fill-in the Blank (أكمل الفراغ)'}
-                {currentQ.type === 'essay' && 'Concept / Short Essay (مفهوم علمي)'}
-                {currentQ.type === 'matching' && 'Matching Items (توصيل)'}
+                {qType === 'mcq' && 'Multiple Choice (اختيار من متعدد)'}
+                {qType === 'true_false' && 'True / False (صح أو خطأ)'}
+                {qType === 'complete' && 'Complete / Fill-in the Blank (أكمل الفراغ)'}
+                {qType === 'essay' && 'Concept / Short Essay (مفهوم علمي)'}
+                {qType === 'matching' && 'Matching Items (توصيل)'}
               </span>
             </div>
 
@@ -484,11 +505,11 @@ export const LiveProjectorScreen: React.FC<Props> = ({
             </div>
 
             {/* Render based on question type */}
-            {currentQ.type === 'mcq' && renderMCQ(currentQ as MCQQuestion)}
-            {currentQ.type === 'true_false' && renderTrueFalse(currentQ as TrueFalseQuestion)}
-            {currentQ.type === 'complete' && renderComplete(currentQ as CompleteQuestion)}
-            {currentQ.type === 'essay' && renderEssay(currentQ as EssayQuestion)}
-            {currentQ.type === 'matching' && renderMatching(currentQ as MatchingQuestion)}
+            {qType === 'mcq' && renderMCQ(currentQ as MCQQuestion)}
+            {qType === 'true_false' && renderTrueFalse(currentQ as TrueFalseQuestion)}
+            {qType === 'complete' && renderComplete(currentQ as CompleteQuestion)}
+            {qType === 'essay' && renderEssay(currentQ as EssayQuestion)}
+            {qType === 'matching' && renderMatching(currentQ as MatchingQuestion)}
 
             {/* Review mode Explanation */}
             {isReviewMode && currentQ.explanation && (
@@ -616,9 +637,12 @@ export const LiveProjectorScreen: React.FC<Props> = ({
   // Question renderers
   function renderMCQ(q: MCQQuestion) {
     const letters = ['A', 'B', 'C', 'D'];
+    const options = Array.isArray(q.options) && q.options.length > 0
+      ? q.options
+      : ['Option A', 'Option B', 'Option C', 'Option D'];
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2" dir="ltr">
-        {q.options.map((opt, idx) => {
+        {options.map((opt, idx) => {
           const isCorrect = isReviewMode && idx === q.correctOptionIndex;
           return (
             <div
@@ -766,13 +790,15 @@ export const LiveProjectorScreen: React.FC<Props> = ({
   }
 
   function renderMatching(q: MatchingQuestion) {
+    const leftItems = Array.isArray(q.leftItems) ? q.leftItems : [];
+    const rightItems = Array.isArray(q.rightItems) ? q.rightItems : [];
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 text-left" dir="ltr">
         <div className="space-y-3">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Column A</div>
-          {q.leftItems.map((item, idx) => (
+          {leftItems.map((item, idx) => (
             <div
-              key={item.id}
+              key={item.id || idx}
               className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 font-bold text-sm text-slate-800 flex items-center gap-2.5"
             >
               <span className="w-6 h-6 rounded-lg bg-[#5E2777] text-white flex items-center justify-center text-xs font-mono">
@@ -785,11 +811,11 @@ export const LiveProjectorScreen: React.FC<Props> = ({
 
         <div className="space-y-3">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">Column B</div>
-          {q.rightItems.map((item, idx) => {
+          {rightItems.map((item, idx) => {
             const letter = String.fromCharCode(65 + idx);
             return (
               <div
-                key={item.id}
+                key={item.id || idx}
                 className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 font-bold text-sm text-slate-800 flex items-center gap-2.5"
               >
                 <span className="w-6 h-6 rounded-lg bg-white border border-slate-300 text-slate-700 flex items-center justify-center text-xs font-mono">

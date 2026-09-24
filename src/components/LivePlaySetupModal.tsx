@@ -18,7 +18,7 @@ interface LivePlaySetupModalProps {
     school: string;
     className: TargetClass;
     randomize: boolean;
-  }) => void;
+  }) => Promise<void> | void;
 }
 
 export const LivePlaySetupModal: React.FC<LivePlaySetupModalProps> = ({
@@ -37,14 +37,27 @@ export const LivePlaySetupModal: React.FC<LivePlaySetupModalProps> = ({
     quiz.targetClasses[0] || 'A1'
   );
   const [randomize, setRandomize] = useState<boolean>(true);
+  const [isStarting, setIsStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleStart = () => {
-    onConfirmStart({
-      quizId: quiz.id,
-      school: selectedSchool,
-      className: selectedClass,
-      randomize,
-    });
+  const handleStart = async () => {
+    if (!quiz.questions || quiz.questions.length === 0) {
+      setError('لا توجد أسئلة مضافة في هذا الاختبار لعرضها على شاشة البروجيكتور.');
+      return;
+    }
+    setError(null);
+    setIsStarting(true);
+    try {
+      await onConfirmStart({
+        quizId: quiz.id,
+        school: selectedSchool,
+        className: selectedClass,
+        randomize,
+      });
+    } catch (e: any) {
+      setError(e?.message || 'حدث خطأ أثناء تشغيل الجلسة على البروجيكتور');
+      setIsStarting(false);
+    }
   };
 
   return (
@@ -186,23 +199,40 @@ export const LivePlaySetupModal: React.FC<LivePlaySetupModalProps> = ({
           </div>
         </div>
 
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-700">
+            {error}
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
           <button
             type="button"
+            disabled={isStarting}
             onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 transition-colors cursor-pointer"
+            className="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 transition-colors cursor-pointer disabled:opacity-50"
           >
             إلغاء
           </button>
 
           <button
             type="button"
+            disabled={isStarting}
             onClick={handleStart}
-            className="px-6 py-2.5 bg-[#5E2777] hover:bg-[#4d1f63] text-white font-bold rounded-xl text-xs sm:text-sm shadow-md shadow-[#5E2777]/20 transition-all flex items-center gap-2 cursor-pointer"
+            className="px-6 py-2.5 bg-[#5E2777] hover:bg-[#4d1f63] text-white font-bold rounded-xl text-xs sm:text-sm shadow-md shadow-[#5E2777]/20 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-60"
           >
-            <Play className="w-4 h-4 fill-white" />
-            <span>تشغيل العرض على البروجيكتور</span>
+            {isStarting ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>جاري فتح شاشة البروجيكتور...</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4 fill-white" />
+                <span>تشغيل العرض على البروجيكتور</span>
+              </>
+            )}
           </button>
         </div>
       </div>
