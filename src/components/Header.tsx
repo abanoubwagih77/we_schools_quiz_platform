@@ -13,6 +13,8 @@ import {
   Menu,
   X,
   RotateCw,
+  User,
+  Lock,
 } from 'lucide-react';
 import { User as UserType } from '../types';
 import { WeLogo } from './WeLogo';
@@ -24,6 +26,7 @@ interface HeaderProps {
   onCreateQuiz: () => void;
   onOpenAccountSettings: () => void;
   onOpenInstructorAccounts?: () => void;
+  onChangeTeacherName?: () => void;
   onLogout: () => void;
 }
 
@@ -62,6 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
   onCreateQuiz,
   onOpenAccountSettings,
   onOpenInstructorAccounts,
+  onChangeTeacherName,
   onLogout,
 }) => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -116,32 +120,30 @@ export const Header: React.FC<HeaderProps> = ({
               <span>الكويزات والمجلدات</span>
             </button>
 
-            {isAdmin && (
-              <>
-                <button
-                  onClick={() => setActiveTab('sessions')}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    activeTab === 'sessions'
-                      ? 'bg-white text-[#5E2777] shadow-xs'
-                      : 'text-slate-600 hover:text-[#5E2777]'
-                  }`}
-                >
-                  <History className="w-4 h-4" />
-                  <span>جلسات البروجيكتور</span>
-                </button>
+            <button
+              onClick={() => setActiveTab('sessions')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'sessions'
+                  ? 'bg-white text-[#5E2777] shadow-xs'
+                  : 'text-slate-600 hover:text-[#5E2777]'
+              }`}
+            >
+              <History className="w-4 h-4" />
+              <span>جلسات البروجيكتور</span>
+            </button>
 
-                <button
-                  onClick={() => setActiveTab('activity')}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    activeTab === 'activity'
-                      ? 'bg-white text-[#5E2777] shadow-xs'
-                      : 'text-slate-600 hover:text-[#5E2777]'
-                  }`}
-                >
-                  <Activity className="w-4 h-4" />
-                  <span>نشاط المدارس والفصول</span>
-                </button>
-              </>
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab('activity')}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === 'activity'
+                    ? 'bg-white text-[#5E2777] shadow-xs'
+                    : 'text-slate-600 hover:text-[#5E2777]'
+                }`}
+              >
+                <Activity className="w-4 h-4" />
+                <span>نشاط المدارس والفصول</span>
+              </button>
             )}
           </nav>
 
@@ -245,16 +247,41 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                   )}
 
-                  <button
-                    onClick={() => {
-                      setUserMenuOpen(false);
-                      onOpenAccountSettings();
-                    }}
-                    className="w-full text-right px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 hover:bg-purple-50 text-slate-700 transition-colors cursor-pointer"
-                  >
-                    <KeyRound className="w-3.5 h-3.5 text-[#5E2777]" />
-                    <span>إعدادات الحساب وكلمة المرور</span>
-                  </button>
+                  {!isAdmin && onChangeTeacherName && (
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        onChangeTeacherName();
+                      }}
+                      className="w-full text-right px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-purple-50 text-[#5E2777] transition-colors cursor-pointer"
+                    >
+                      <User className="w-3.5 h-3.5 text-[#5E2777]" />
+                      <span>تعديل اسم المعلم للجلسة الحالية</span>
+                    </button>
+                  )}
+
+                  {isAdmin ? (
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        onOpenAccountSettings();
+                      }}
+                      className="w-full text-right px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 hover:bg-purple-50 text-slate-700 transition-colors cursor-pointer"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-[#5E2777]" />
+                      <span>إعدادات الحساب وكلمة المرور</span>
+                    </button>
+                  ) : (
+                    <div className="px-3 py-2.5 my-1 text-[11px] text-slate-500 bg-slate-50 rounded-xl border border-slate-100 leading-relaxed text-right">
+                      <div className="flex items-center gap-1.5 text-slate-700 font-bold mb-0.5">
+                        <Lock className="w-3 h-3 text-[#5E2777]" />
+                        <span>حساب مشترك لفرع المدرسة</span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        تغيير كلمة المرور أو اليوزر متاح للادمن فقط للحفاظ على استقرار الحساب المشترك.
+                      </p>
+                    </div>
+                  )}
 
                   <button
                     onClick={() => {
@@ -300,38 +327,36 @@ export const Header: React.FC<HeaderProps> = ({
                 <span>الكويزات والمجلدات الأسبوعية</span>
               </button>
 
-              {isAdmin && (
-                <>
-                  <button
-                    onClick={() => {
-                      setActiveTab('sessions');
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-right cursor-pointer ${
-                      activeTab === 'sessions'
-                        ? 'bg-[#5E2777] text-white shadow-xs'
-                        : 'bg-purple-50/50 text-slate-700 hover:bg-purple-50'
-                    }`}
-                  >
-                    <History className="w-4 h-4" />
-                    <span>جلسات البروجيكتور ومراجعة الإجابات</span>
-                  </button>
+              <button
+                onClick={() => {
+                  setActiveTab('sessions');
+                  setMobileMenuOpen(false);
+                }}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-right cursor-pointer ${
+                  activeTab === 'sessions'
+                    ? 'bg-[#5E2777] text-white shadow-xs'
+                    : 'bg-purple-50/50 text-slate-700 hover:bg-purple-50'
+                }`}
+              >
+                <History className="w-4 h-4" />
+                <span>جلسات البروجيكتور ومراجعة الإجابات</span>
+              </button>
 
-                  <button
-                    onClick={() => {
-                      setActiveTab('activity');
-                      setMobileMenuOpen(false);
-                    }}
-                    className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-right cursor-pointer ${
-                      activeTab === 'activity'
-                        ? 'bg-[#5E2777] text-white shadow-xs'
-                        : 'bg-purple-50/50 text-slate-700 hover:bg-purple-50'
-                    }`}
-                  >
-                    <Activity className="w-4 h-4" />
-                    <span>نشاط المدارس والفصول المعتمدة</span>
-                  </button>
-                </>
+              {isAdmin && (
+                <button
+                  onClick={() => {
+                    setActiveTab('activity');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all text-right cursor-pointer ${
+                    activeTab === 'activity'
+                      ? 'bg-[#5E2777] text-white shadow-xs'
+                      : 'bg-purple-50/50 text-slate-700 hover:bg-purple-50'
+                  }`}
+                >
+                  <Activity className="w-4 h-4" />
+                  <span>نشاط المدارس والفصول المعتمدة</span>
+                </button>
               )}
             </div>
 

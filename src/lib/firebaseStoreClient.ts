@@ -1,5 +1,5 @@
 import { firestore } from './firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import {
   Quiz,
   QuizSession,
@@ -315,6 +315,56 @@ export async function saveClientStore(store: DatabaseSchema): Promise<boolean> {
 function isApiJsonResponse(res: Response): boolean {
   const ct = res.headers.get('content-type') || '';
   return res.ok && ct.includes('application/json');
+}
+
+/**
+ * Subscribes to real-time Cloud Firestore updates.
+ * When data is changed or added on any computer/device,
+ * this listener immediately updates quizzes, folders, and sessions on all other active devices.
+ */
+export function subscribeToStoreUpdates(
+  onUpdate: (data: { quizzes: Quiz[]; folders: WeekFolder[]; sessions: QuizSession[] }) => void
+): () => void {
+  try {
+    const docRef = doc(firestore, STORE_COLLECTION, STORE_DOC_ID);
+    const unsubscribe = onSnapshot(
+      docRef,
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data && Array.isArray(data.users)) {
+            const folders = Array.isArray(data.folders) ? data.folders : [];
+            const quizzes = Array.isArray(data.quizzes)
+              ? data.quizzes.map((q: any) => ({
+                  ...q,
+                  questions: Array.isArray(q.questions) ? q.questions.map(normalizeQuestion) : [],
+                }))
+              : [];
+            const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+
+            // Update in-memory cached store and local backup without re-triggering cloud save
+            cachedStore = {
+              users: Array.isArray(data.users) ? data.users : (cachedStore?.users || DEFAULT_USERS),
+              folders,
+              quizzes,
+              sessions,
+              logs: Array.isArray(data.logs) ? data.logs : [],
+            };
+            saveLocalStoreBackup(cachedStore);
+
+            onUpdate({ quizzes, folders, sessions });
+          }
+        }
+      },
+      (error) => {
+        console.warn('[Firebase Realtime Listener] Snapshot error:', error);
+      }
+    );
+    return unsubscribe;
+  } catch (err) {
+    console.warn('[Firebase Realtime Listener] Setup error:', err);
+    return () => {};
+  }
 }
 
 /**
@@ -851,6 +901,10 @@ export async function apiUpdateUserCredentials(params: {
   if (idx === -1) throw new Error('الحساب غير موجود.');
 
   const existing = store.users[idx];
+  if (existing.role !== 'admin') {
+    throw new Error('تعديل اسم المستخدم أو كلمة المرور متاح للمسؤول الرئيسي فقط للحفاظ على استقرار الحساب المشترك للمدرسة.');
+  }
+
   if (params.currentPassword && existing.password && existing.password !== params.currentPassword.trim()) {
     throw new Error('كلمة المرور الحالية غير صحيحة.');
   }
@@ -861,6 +915,65 @@ export async function apiUpdateUserCredentials(params: {
     password: params.newPassword?.trim() || existing.password,
     school: params.newSchool || existing.school,
     name: params.newName || existing.name,
+  };
+
+  store.users[idx] = updated;
+  await saveClientStore(store);
+
+  const { password: _, ...safeUser } = updated;
+  return safeUser as User;
+}
+
+/**
+ * Admin: Update Instructor Account (Username, Password, School)
+ */
+export async function apiAdminUpdateUser(
+  userId: string,
+  params: {
+    username?: string;
+    password?: string;
+    school?: string;
+    name?: string;
+  }
+): Promise<User> {
+  try {
+    const res = await fetch(`/api/users/${userId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    if (isApiJsonResponse(res)) {
+      const data = await res.json();
+      if (data && data.id) {
+        const store = await getClientStore();
+        const idx = store.users.findIndex((u) => u.id === userId);
+        if (idx !== -1) {
+          store.users[idx] = {
+            ...store.users[idx],
+            username: params.username ? params.username.trim() : store.users[idx].username,
+            password: params.password ? params.password.trim() : store.users[idx].password,
+            school: params.school || store.users[idx].school,
+            name: params.name || store.users[idx].name,
+          };
+          await saveClientStore(store);
+        }
+        return data;
+      }
+    }
+  } catch (_) {}
+
+  // Direct Firestore / Local update fallback
+  const store = await getClientStore();
+  const idx = store.users.findIndex((u) => u.id === userId);
+  if (idx === -1) throw new Error('الحساب غير موجود.');
+
+  const existing = store.users[idx];
+  const updated: User = {
+    ...existing,
+    username: params.username ? params.username.trim() : existing.username,
+    password: params.password ? params.password.trim() : existing.password,
+    school: params.school || existing.school,
+    name: params.name || existing.name,
   };
 
   store.users[idx] = updated;

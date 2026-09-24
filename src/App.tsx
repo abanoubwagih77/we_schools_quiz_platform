@@ -10,11 +10,13 @@ import { LoginPage } from './components/LoginPage';
 import { AccountSettingsModal } from './components/AccountSettingsModal';
 import { FolderModal } from './components/FolderModal';
 import { InstructorAccountsModal } from './components/InstructorAccountsModal';
+import { ChangeTeacherNameModal } from './components/ChangeTeacherNameModal';
 import { Quiz, QuizSession, User, TargetClass, QuizQuestion, WeekFolder, WE_SCHOOLS } from './types';
 import { CheckCircle2, AlertTriangle, X } from 'lucide-react';
 import { WeLogo } from './components/WeLogo';
 import {
   apiFetchAllData,
+  subscribeToStoreUpdates,
   apiSaveQuiz,
   apiDeleteQuiz,
   apiToggleQuizStatus,
@@ -53,6 +55,7 @@ export default function App() {
   const [targetFolderForNewQuiz, setTargetFolderForNewQuiz] = useState<string | undefined>(undefined);
   const [showAccountSettings, setShowAccountSettings] = useState<boolean>(false);
   const [showInstructorAccounts, setShowInstructorAccounts] = useState<boolean>(false);
+  const [showChangeTeacherNameModal, setShowChangeTeacherNameModal] = useState<boolean>(false);
 
   // Folder modal
   const [folderModalOpen, setFolderModalOpen] = useState<boolean>(false);
@@ -176,9 +179,22 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (currentUser) {
-      fetchData();
-    }
+    if (!currentUser) return;
+
+    fetchData();
+
+    // Live cross-device real-time sync with Cloud Firestore:
+    // Any change (creating/editing a quiz, updating folders, running sessions) made on ANY computer/laptop
+    // will instantly reflect right here in real time.
+    const unsubscribe = subscribeToStoreUpdates(({ quizzes: liveQuizzes, folders: liveFolders, sessions: liveSessions }) => {
+      setQuizzes(liveQuizzes);
+      setFolders(liveFolders);
+      setSessions(liveSessions);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [currentUser]);
 
   // Handle successful login
@@ -215,6 +231,18 @@ export default function App() {
       localStorage.setItem('we_quiz_user', JSON.stringify(updatedUser));
     } catch (e) {}
     showToast('تم حفظ وتحديث بيانات الحساب بنجاح.');
+  };
+
+  // Handle teacher name change during session
+  const handleSaveTeacherName = (newName: string) => {
+    if (!currentUser) return;
+    const updated = { ...currentUser, name: newName };
+    setCurrentUser(updated);
+    try {
+      localStorage.setItem('we_quiz_user', JSON.stringify(updated));
+      localStorage.setItem('we_last_teacher_name', newName);
+    } catch (e) {}
+    showToast(`تم تعيين اسم المعلم للجلسة الحالية: ${newName}`);
   };
 
   // START LIVE SESSION
@@ -479,6 +507,7 @@ export default function App() {
         }}
         onOpenAccountSettings={() => setShowAccountSettings(true)}
         onOpenInstructorAccounts={() => setShowInstructorAccounts(true)}
+        onChangeTeacherName={() => setShowChangeTeacherNameModal(true)}
         onLogout={handleLogout}
       />
 
@@ -527,12 +556,14 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'sessions' && currentUser.role === 'admin' && (
+            {activeTab === 'sessions' && (
               <SessionsView
-                sessions={sessions}
+                sessions={currentUser.role === 'admin' ? sessions : sessions.filter((s) => s.school === currentUser.school)}
+                quizzes={quizzes}
+                currentUser={currentUser}
                 onOpenSession={handleOpenHistoricalSession}
-                onDeleteSession={handleDeleteSession}
-                onClearAllSessions={handleClearAllSessions}
+                onDeleteSession={currentUser.role === 'admin' ? handleDeleteSession : undefined}
+                onClearAllSessions={currentUser.role === 'admin' ? handleClearAllSessions : undefined}
                 isDark={false}
               />
             )}
@@ -614,6 +645,15 @@ export default function App() {
           currentUser={currentUser}
           onClose={() => setShowAccountSettings(false)}
           onUserUpdated={handleUserUpdated}
+        />
+      )}
+
+      {/* Change Teacher Name Modal (Session Identity) */}
+      {showChangeTeacherNameModal && currentUser && (
+        <ChangeTeacherNameModal
+          currentUser={currentUser}
+          onClose={() => setShowChangeTeacherNameModal(false)}
+          onSave={handleSaveTeacherName}
         />
       )}
 

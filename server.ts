@@ -118,7 +118,7 @@ async function startServer() {
     });
   });
 
-  // Auth: Update credentials (change username, password, school, name)
+  // Auth: Update credentials (change username, password, school, name) - Admin Only
   app.post('/api/auth/update-credentials', (req, res) => {
     const { userId, currentPassword, newUsername, newPassword, newSchool, newName } = req.body;
 
@@ -129,6 +129,13 @@ async function startServer() {
     const userWithPass = db.getUsersWithPasswords().find((u) => u.id === userId);
     if (!userWithPass) {
       return res.status(404).json({ error: 'User not found.' });
+    }
+
+    // STRICT: Only the system administrator can change account usernames or passwords
+    if (userWithPass.role !== 'admin') {
+      return res.status(403).json({
+        error: 'تعديل اسم المستخدم أو كلمة المرور متاح للمسؤول الرئيسي فقط للحفاظ على استقرار الحساب المشترك للمدرسة.',
+      });
     }
 
     if (userWithPass.password && currentPassword !== undefined && userWithPass.password !== currentPassword) {
@@ -196,6 +203,36 @@ async function startServer() {
       return res.status(400).json({ error: 'Cannot delete this account (admin or not found).' });
     }
     res.json({ message: 'Instructor account deleted successfully.' });
+  });
+
+  // Admin User Management: Update instructor account credentials (password / username / school)
+  app.put('/api/users/:id', (req, res) => {
+    const { username, password, school, name } = req.body;
+    const userWithPass = db.getUsersWithPasswords().find((u) => u.id === req.params.id);
+    if (!userWithPass) {
+      return res.status(404).json({ error: 'Account not found.' });
+    }
+
+    const result = db.updateUserCredentials(
+      req.params.id,
+      username || userWithPass.username,
+      password || undefined,
+      school || userWithPass.school,
+      name || userWithPass.name
+    );
+
+    if (!result.success) {
+      return res.status(400).json({ error: result.error || 'Failed to update user credentials.' });
+    }
+
+    db.addLog({
+      type: 'login',
+      username: 'admin',
+      school: school || userWithPass.school,
+      details: `Admin updated credentials for branch account: (${userWithPass.username})`,
+    });
+
+    res.json(result.user);
   });
 
   // Folders (Weeks): List all

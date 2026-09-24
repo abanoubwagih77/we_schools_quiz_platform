@@ -297,7 +297,7 @@ export const LiveProjectorScreen: React.FC<Props> = ({
             بـ <strong className="text-slate-900">{session.school}</strong>.
           </p>
 
-          <div className="bg-purple-50/50 border border-purple-100 rounded-2xl p-4 mb-8 grid grid-cols-3 gap-3 text-center">
+          <div className="bg-purple-50/50 border border-purple-100 rounded-2xl p-4 mb-8 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
             <div>
               <div className="text-xs text-slate-400 mb-0.5 font-bold">معرف الجلسة</div>
               <div className="font-mono text-[#5E2777] font-bold text-xs sm:text-sm">{session.id}</div>
@@ -310,6 +310,12 @@ export const LiveProjectorScreen: React.FC<Props> = ({
               <div className="text-xs text-slate-400 mb-0.5 font-bold">المدرسة والفصل</div>
               <div className="font-bold text-[#5E2777] text-xs sm:text-sm truncate">
                 {session.className} • {session.school.replace('WE Applied Technology School - ', 'مدرسة WE - ')}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 mb-0.5 font-bold">المشرف / المعلم</div>
+              <div className="font-bold text-slate-900 text-xs sm:text-sm truncate">
+                {session.instructorName || 'معلم المادة'}
               </div>
             </div>
           </div>
@@ -390,6 +396,12 @@ export const LiveProjectorScreen: React.FC<Props> = ({
               <span className="px-2.5 py-0.5 bg-[#5E2777] text-white rounded-lg text-xs font-mono font-bold tracking-wider">
                 Class {session.className}
               </span>
+              {session.instructorName && (
+                <span className="hidden md:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-purple-50 text-[#5E2777] border border-purple-200 text-xs font-bold">
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  <span>المعلم: {session.instructorName}</span>
+                </span>
+              )}
               {session.topic && (
                 <span className="hidden sm:inline-flex items-center gap-1 text-xs text-slate-500 font-medium">
                   <Tag className="w-3 h-3 text-[#5E2777]" />

@@ -23,6 +23,45 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
   onClose,
   onUserUpdated,
 }) => {
+  // STRICT: If not admin, block editing credentials completely
+  if (currentUser.role !== 'admin') {
+    return (
+      <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 select-none" dir="rtl">
+        <div className="w-full max-w-md rounded-3xl p-6 shadow-xl border bg-white border-purple-100 text-slate-800 text-right">
+          <div className="flex items-center justify-between pb-3 border-b border-purple-100 mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-purple-50 text-[#5E2777] flex items-center justify-center">
+                <Lock className="w-4 h-4" />
+              </div>
+              <h3 className="text-base font-black text-slate-900">إعدادات الحساب</h3>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-4 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl text-xs flex items-start gap-2.5 mb-5 leading-relaxed">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <strong className="block text-slate-900 font-bold mb-1">خاص بمسؤول النظام فقط:</strong>
+              نظراً لأن هذا الحساب مشترك لمعلمي المادة في ({currentUser.school})، فإن تعديل اسم المستخدم أو كلمة المرور متاح حصراً من خلال إدارة النظام (Admin) للحفاظ على استقرار الحساب المشترك.
+            </div>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 bg-[#5E2777] hover:bg-[#4d1f63] text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+          >
+            إغلاق
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const [newUsername, setNewUsername] = useState(currentUser.username || 'admin');
   const [selectedSchool, setSelectedSchool] = useState<string>(currentUser.school || 'WE Applied Technology School - Toukh');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -192,8 +231,7 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
             <select
               value={selectedSchool}
               onChange={(e) => setSelectedSchool(e.target.value)}
-              disabled={currentUser.role === 'instructor'}
-              className="w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm bg-slate-50 border border-slate-300 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#5E2777]/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed font-semibold"
+              className="w-full px-3.5 py-2.5 rounded-xl text-xs sm:text-sm bg-slate-50 border border-slate-300 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#5E2777]/30 transition-all font-semibold"
             >
               <option value="WE Applied Technology School - Toukh">
                 مدرسة WE للتكنولوجيا التطبيقية - طوخ
@@ -211,11 +249,6 @@ export const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({
                 مدرسة WE للتكنولوجيا التطبيقية - قنا
               </option>
             </select>
-            {currentUser.role === 'instructor' && (
-              <span className="text-[10px] text-slate-400 mt-1 block">
-                تحديد الفرع يتم من خلال المشرف / مدير النظام.
-              </span>
-            )}
           </div>
 
           {/* Current Password */}
